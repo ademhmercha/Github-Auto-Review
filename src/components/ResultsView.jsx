@@ -94,10 +94,10 @@ export default function ResultsView({ agentStates, onReset }) {
       : 'text-red-400';
 
   return (
-    <div className="min-h-screen bg-gray-950 p-4 md:p-8">
+    <div className="min-h-screen bg-gray-950 p-4 md:p-8 print-container">
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="print-header flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-white">AutoReview Agent</h1>
             {explorerResult && (
@@ -107,17 +107,28 @@ export default function ResultsView({ agentStates, onReset }) {
             )}
           </div>
           {isDone && (
-            <button
-              onClick={onReset}
-              className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-            >
-              Analyze another repo
-            </button>
+            <div className="no-print flex items-center gap-3">
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Export PDF
+              </button>
+              <button
+                onClick={onReset}
+                className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+              >
+                Analyze another repo
+              </button>
+            </div>
           )}
         </div>
 
         {/* Agent progress list */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
+        <div className="no-print bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Agent Pipeline</p>
           {AGENT_ORDER.map((key) => {
             const state = agentStates[key] || { status: 'waiting' };
@@ -304,7 +315,7 @@ export default function ResultsView({ agentStates, onReset }) {
 
         {/* Reset button at bottom */}
         {isDone && (
-          <div className="pt-2 pb-8 text-center">
+          <div className="no-print pt-2 pb-8 text-center">
             <button
               onClick={onReset}
               className="bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium py-2.5 px-6 rounded-lg transition-colors text-sm border border-gray-700"
