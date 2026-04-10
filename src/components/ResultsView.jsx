@@ -3,9 +3,10 @@ const AGENT_LABELS = {
   reviewer: { label: 'Code Reviewer Agent', desc: 'Analyzing code quality' },
   doc: { label: 'Doc Agent', desc: 'Checking documentation' },
   reporter: { label: 'Reporter Agent', desc: 'Generating audit report' },
+  refactor: { label: 'Refactor Agent', desc: 'Suggesting code improvements' },
 };
 
-const AGENT_ORDER = ['explorer', 'reviewer', 'doc', 'reporter'];
+const AGENT_ORDER = ['explorer', 'reviewer', 'doc', 'reporter', 'refactor'];
 
 const SEVERITY_STYLES = {
   critical: { bg: 'bg-red-950', border: 'border-red-800', badge: 'bg-red-700 text-red-100', text: 'text-red-300' },
@@ -75,6 +76,7 @@ export default function ResultsView({ agentStates, onReset }) {
   const reviewerResult = agentStates.reviewer?.result;
   const docResult = agentStates.doc?.result;
   const reporterResult = agentStates.reporter?.result;
+  const refactorResult = agentStates.refactor?.result;
 
   const isDone = AGENT_ORDER.every(
     (a) => agentStates[a]?.status === 'done' || agentStates[a]?.status === 'error'
@@ -259,6 +261,43 @@ export default function ResultsView({ agentStates, onReset }) {
                   </ol>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Refactor suggestions */}
+        {refactorResult?.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">
+              Refactor Suggestions ({refactorResult.length})
+            </p>
+            <div className="space-y-4">
+              {refactorResult.map((s, i) => (
+                <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-800/50">
+                    <div>
+                      <span className="text-sm font-semibold text-white">{s.title}</span>
+                      <span className="text-xs text-gray-500 font-mono ml-2">{s.file}</span>
+                    </div>
+                    <span className="text-xs bg-indigo-900 text-indigo-300 border border-indigo-700 px-2 py-0.5 rounded-full">
+                      suggestion
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 divide-x divide-gray-800">
+                    <div className="p-3">
+                      <p className="text-xs font-medium text-red-400 mb-1.5">Before</p>
+                      <pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap leading-relaxed">{s.before}</pre>
+                    </div>
+                    <div className="p-3">
+                      <p className="text-xs font-medium text-emerald-400 mb-1.5">After</p>
+                      <pre className="text-xs text-gray-300 font-mono whitespace-pre-wrap leading-relaxed">{s.after}</pre>
+                    </div>
+                  </div>
+                  <div className="px-4 py-2.5 border-t border-gray-800 bg-gray-800/30">
+                    <p className="text-xs text-gray-400"><span className="text-gray-500">Why: </span>{s.reason}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

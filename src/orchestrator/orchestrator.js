@@ -2,6 +2,7 @@ import { explorerAgent } from '../agents/explorerAgent.js';
 import { reviewerAgent } from '../agents/reviewerAgent.js';
 import { docAgent } from '../agents/docAgent.js';
 import { reporterAgent } from '../agents/reporterAgent.js';
+import { refactorAgent } from '../agents/refactorAgent.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -10,6 +11,7 @@ export async function runOrchestrator(repoUrl, apiKey, onProgress) {
   let reviewerResult = [];
   let docResult = { generatedReadme: null };
   let reporterResult = null;
+  let refactorResult = [];
 
   // Agent 1: Explorer (no API call)
   onProgress({ agent: 'explorer', status: 'running' });
@@ -18,9 +20,9 @@ export async function runOrchestrator(repoUrl, apiKey, onProgress) {
     onProgress({ agent: 'explorer', status: 'done', result: explorerResult });
   } catch (err) {
     onProgress({ agent: 'explorer', status: 'error', error: err.message });
-    onProgress({ agent: 'reviewer', status: 'error', error: 'Skipped: Explorer failed' });
-    onProgress({ agent: 'doc', status: 'error', error: 'Skipped: Explorer failed' });
-    onProgress({ agent: 'reporter', status: 'error', error: 'Skipped: Explorer failed' });
+    ['reviewer', 'doc', 'reporter', 'refactor'].forEach((a) =>
+      onProgress({ agent: a, status: 'error', error: 'Skipped: Explorer failed' })
+    );
     return null;
   }
 
@@ -57,5 +59,16 @@ export async function runOrchestrator(repoUrl, apiKey, onProgress) {
     reporterResult = null;
   }
 
-  return { explorerResult, reviewerResult, docResult, reporterResult };
+  // Agent 5: Refactor
+  await sleep(2000);
+  onProgress({ agent: 'refactor', status: 'running' });
+  try {
+    refactorResult = await refactorAgent(explorerResult, reviewerResult, apiKey);
+    onProgress({ agent: 'refactor', status: 'done', result: refactorResult });
+  } catch (err) {
+    onProgress({ agent: 'refactor', status: 'error', error: err.message });
+    refactorResult = [];
+  }
+
+  return { explorerResult, reviewerResult, docResult, reporterResult, refactorResult };
 }
