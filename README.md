@@ -88,28 +88,3 @@ src/
 │   └── groq.js             # Fetch wrapper for Groq API calls
 └── App.jsx                 # Root component, manages screen state
 ```
-
-## Deployment
-
-The project includes a `vercel.json` pre-configured for Vite:
-
-```bash
-npm run build
-vercel
-```
-
-Or connect the GitHub repo directly in the [Vercel dashboard](https://vercel.com/new) for automatic deployments on every push.
-
-## Groq Free Tier Limits
-
-| Limit | Value |
-|-------|-------|
-| Requests / minute | 30 req/min |
-| Tokens / minute | 6,000 tokens/min |
-| Requests / day | 14,400 req/day |
-
-Each full analysis uses 3 API calls — well within free tier limits for student use.
-
-## License
-
-MIT
