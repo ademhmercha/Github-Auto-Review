@@ -8,6 +8,7 @@ const INITIAL_STATES = {
   reviewer: { status: 'waiting' },
   doc: { status: 'waiting' },
   reporter: { status: 'waiting' },
+  refactor: { status: 'waiting' },
 };
 
 export default function App() {
