@@ -1,18 +1,59 @@
 import { useState, useEffect } from 'react';
 
 const AGENTS = [
-  { name: 'Explorer', desc: 'Maps structure & stack' },
-  { name: 'Reviewer', desc: 'Finds bugs & smells' },
-  { name: 'Docs', desc: 'Audits & writes README' },
-  { name: 'Reporter', desc: 'Scores the codebase' },
-  { name: 'Refactor', desc: 'Before / after fixes' },
+  ['01', 'Explorer', 'maps the structure'],
+  ['02', 'Reviewer', 'hunts bugs & smells'],
+  ['03', 'Docs', 'audits the README'],
+  ['04', 'Reporter', 'scores the codebase'],
+  ['05', 'Refactor', 'rewrites the worst parts'],
 ];
 
-function Icon({ d, className = 'w-4 h-4' }) {
+const DIFF = [
+  { n: 12, t: ' ', code: 'async function load(url) {', d: 900 },
+  { n: 13, t: '-', code: '  var data = fetch(url).json()', d: 1500 },
+  { n: 13, t: '+', code: '  const res = await fetch(url)', d: 2200 },
+  { n: 14, t: '+', code: '  const data = await res.json()', d: 2700 },
+  { n: 15, t: ' ', code: '  return data', d: 3200 },
+];
+
+function Word({ children, d }) {
   return (
-    <svg className={className} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-    </svg>
+    <span className="mask">
+      <span style={{ '--d': `${d}ms` }}>{children}</span>
+    </span>
+  );
+}
+
+function DiffDemo() {
+  return (
+    <div className="slab relative overflow-hidden rise-in" style={{ '--d': '700ms' }}>
+      <div className="flex items-center justify-between border-b-[1.5px] border-ink px-4 py-2">
+        <span className="font-mono text-[11px] font-medium">src/api/load.js</span>
+        <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-widest text-ember">
+          <span className="h-1.5 w-1.5 rounded-full bg-ember pulse-ember" /> reviewing
+        </span>
+      </div>
+      <div className="relative py-2 font-mono text-[12.5px] leading-7">
+        <span className="scanbar" />
+        {DIFF.map((l, i) => (
+          <div
+            key={i}
+            className={`diff-line flex px-4 ${
+              l.t === '-' ? 'bg-blood/10 text-blood' : l.t === '+' ? 'bg-moss/10 text-moss' : 'text-ink/60'
+            }`}
+            style={{ '--d': `${l.d}ms` }}
+          >
+            <span className="w-8 select-none text-ink/30">{l.n}</span>
+            <span className="w-5 select-none font-bold">{l.t}</span>
+            <span className="whitespace-pre">{l.code}</span>
+          </div>
+        ))}
+        <div className="px-4 pt-1 text-ink/40">
+          <span className="inline-block w-8" />
+          <span className="caret" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -34,110 +75,124 @@ export default function InputForm({ onAnalyze }) {
   }
 
   return (
-    <div className="app-bg min-h-screen flex items-center justify-center px-4 py-12">
-      <div className="relative z-10 w-full max-w-xl animate-fade-up">
-        {/* Hero */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-300 mb-6">
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse" />
-            5 AI agents · powered by Groq
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-[1.1]">
-            Audit any repo
-            <br />
-            <span className="bg-gradient-to-r from-indigo-300 via-violet-300 to-fuchsia-300 bg-clip-text text-transparent">
-              in under a minute.
-            </span>
-          </h1>
-          <p className="mt-4 text-base text-slate-400 max-w-md mx-auto leading-relaxed">
-            Paste a public GitHub link. A team of agents reviews the code, scores quality and proposes refactors.
-          </p>
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      {/* Top bar */}
+      <header className="rise-in flex items-center justify-between px-6 py-5 md:px-12" style={{ '--d': '100ms' }}>
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center bg-ink font-mono text-sm font-bold text-ember">
+            ±
+          </span>
+          <span className="text-sm font-semibold tracking-tight">AutoReview</span>
         </div>
+        <span className="hidden font-mono text-[11px] uppercase tracking-widest text-ink/40 sm:block">
+          5 agents · Groq · free
+        </span>
+      </header>
 
-        {/* Form card */}
-        <form onSubmit={handleSubmit} className="surface rounded-3xl p-6 sm:p-8 space-y-5">
-          <div>
-            <label htmlFor="repo" className="block text-sm font-medium text-slate-300 mb-2">
-              GitHub repository
-            </label>
-            <div className="relative">
-              <Icon
-                className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-                d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
-              />
-              <input
-                id="repo"
-                type="url"
-                value={repoUrl}
-                onChange={(e) => setRepoUrl(e.target.value)}
-                placeholder="https://github.com/owner/repo"
-                className="field pl-11 font-mono text-[13px]"
-                required
-              />
-            </div>
-          </div>
+      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-12 px-6 pb-16 pt-6 md:px-12 lg:grid-cols-[1.15fr_1fr] lg:gap-16">
+        {/* Left: hero */}
+        <section>
+          <h1 className="font-display text-[3.4rem] leading-[0.95] tracking-tight sm:text-7xl lg:text-[5.6rem]">
+            <Word d={150}>Your</Word> <Word d={230}>code,</Word>
+            <br />
+            <Word d={330}>
+              <em className="mark">reviewed</em>
+            </Word>{' '}
+            <Word d={430}>by</Word>
+            <br />
+            <Word d={530}>a</Word> <Word d={610}>team</Word> <Word d={690}>of</Word> <Word d={770}>agents.</Word>
+          </h1>
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label htmlFor="key" className="text-sm font-medium text-slate-300">
-                Groq API key
-              </label>
-              <a
-                href="https://console.groq.com/keys"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-medium text-indigo-300 hover:text-indigo-200 transition-colors"
-              >
-                Get a free key →
-              </a>
-            </div>
-            <div className="relative">
-              <Icon
-                className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
-                d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"
-              />
-              <input
-                id="key"
-                type={showKey ? 'text' : 'password'}
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="gsk_..."
-                className="field pl-11 pr-14 font-mono text-[13px]"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowKey((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs text-slate-500 hover:text-slate-200 transition-colors"
-              >
-                {showKey ? 'Hide' : 'Show'}
-              </button>
-            </div>
-          </div>
-
-          <button type="submit" className="btn-primary !mt-7">
-            Analyze repository
-            <Icon d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </button>
-
-          <p className="flex items-center justify-center gap-1.5 text-xs text-slate-500">
-            <Icon className="w-3.5 h-3.5" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-            Your key stays in this browser, never on our servers
+          <p className="rise-in mt-8 max-w-md text-lg leading-relaxed text-ink/65" style={{ '--d': '1000ms' }}>
+            Paste any public GitHub repo. Five agents read it, score it, and rewrite the worst parts, in about a
+            minute.
           </p>
-        </form>
 
-        {/* Agent lineup */}
-        <div className="mt-8 grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-          {AGENTS.map((a, i) => (
-            <div
-              key={a.name}
-              className="rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3 py-3 animate-fade-up"
-              style={{ animationDelay: `${150 + i * 70}ms` }}
-            >
-              <p className="text-[10px] font-mono text-indigo-300/70">0{i + 1}</p>
-              <p className="text-sm font-semibold text-slate-200 mt-0.5">{a.name}</p>
-              <p className="text-[11px] text-slate-500 leading-snug mt-0.5">{a.desc}</p>
+          <div className="mt-10 max-w-md">
+            <DiffDemo />
+          </div>
+        </section>
+
+        {/* Right: form */}
+        <section className="rise-in" style={{ '--d': '450ms' }}>
+          <form onSubmit={handleSubmit} className="slab p-7 sm:p-9">
+            <p className="eyebrow mb-7">Start an audit</p>
+
+            <div className="mb-8">
+              <label htmlFor="repo" className="mb-1 block text-sm font-semibold">
+                Repository URL
+              </label>
+              <div className="field-wrap">
+                <input
+                  id="repo"
+                  type="url"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  placeholder="https://github.com/owner/repo"
+                  className="field"
+                  required
+                />
+                <span className="field-line" />
+              </div>
             </div>
+
+            <div className="mb-9">
+              <div className="mb-1 flex items-baseline justify-between">
+                <label htmlFor="key" className="text-sm font-semibold">
+                  Groq API key
+                </label>
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-[11px] uppercase tracking-wider text-ink/50 underline decoration-ember decoration-2 underline-offset-4 transition-colors hover:text-ember"
+                >
+                  Get free key ↗
+                </a>
+              </div>
+              <div className="field-wrap">
+                <input
+                  id="key"
+                  type={showKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="gsk_..."
+                  className="field pr-14"
+                  required
+                />
+                <span className="field-line" />
+                <button
+                  type="button"
+                  onClick={() => setShowKey((v) => !v)}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 font-mono text-[11px] uppercase tracking-wider text-ink/40 transition-colors hover:text-ink"
+                >
+                  {showKey ? 'hide' : 'show'}
+                </button>
+              </div>
+            </div>
+
+            <button type="submit" className="btn-ink">
+              <span>Analyze repository</span>
+              <span className="arrow font-mono text-lg">→</span>
+            </button>
+
+            <p className="mt-5 font-mono text-[11px] leading-relaxed text-ink/45">
+              ↳ Your key lives in this browser only. Nothing is stored on a server.
+            </p>
+          </form>
+        </section>
+      </main>
+
+      {/* Agent ticker */}
+      <div className="rise-in border-y-[1.5px] border-ink bg-ink py-3 text-paper" style={{ '--d': '1200ms' }}>
+        <div className="marquee-track">
+          {[...AGENTS, ...AGENTS, ...AGENTS, ...AGENTS].map(([n, name, desc], i) => (
+            <span key={i} className="flex items-center gap-3 pr-10 font-mono text-xs uppercase tracking-widest">
+              <span className="text-ember">{n}</span>
+              <span className="font-bold">{name}</span>
+              <span className="text-paper/50">{desc}</span>
+              <span className="pl-7 text-paper/30">/</span>
+            </span>
           ))}
         </div>
       </div>
