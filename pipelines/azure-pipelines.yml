@@ -1,0 +1,84 @@
+# Pipeline CI - Github-Auto-Review
+# Se déclenche à chaque push sur main et à chaque pull request vers main.
+
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '*.md'
+      - docs/*
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  nodeVersion: '20.x'
+  imageName: 'github-auto-review'
+  imageTag: '$(Build.BuildId)'
+  npm_config_cache: '$(Pipeline.Workspace)/.npm'
+
+stages:
+  - stage: CI
+    displayName: 'Intégration continue'
+    jobs:
+      - job: Build
+        displayName: 'Vérifier, compiler et conteneuriser'
+        pool:
+          vmImage: ubuntu-latest
+
+        steps:
+          - checkout: self
+            fetchDepth: 1
+            displayName: 'Récupérer le code'
+
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '$(nodeVersion)'
+            displayName: 'Installer Node.js $(nodeVersion)'
+
+          - task: Cache@2
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: '$(npm_config_cache)'
+            displayName: 'Cache des dépendances npm'
+
+          - script: npm ci
+            displayName: 'Installer les dépendances'
+
+          - script: npm run lint --if-present
+            displayName: 'Analyse du code (lint)'
+
+          - script: npm audit --audit-level=high
+            displayName: 'Audit de sécurité des dépendances'
+            continueOnError: true
+
+          - script: npm run build
+            displayName: 'Build de production'
+
+          - script: |
+              docker build \
+                -f docker/Dockerfile \
+                -t $(imageName):$(imageTag) \
+                .
+            displayName: "Construire l'image Docker"
+
+          - script: |
+              docker run -d --name smoke -p 8080:8080 $(imageName):$(imageTag)
+              for i in $(seq 1 15); do
+                if curl -fs http://localhost:8080/healthz; then
+                  echo "Le conteneur répond correctement."
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "Le conteneur ne répond pas, voici ses logs :"
+              docker logs smoke
+              exit 1
+            displayName: 'Smoke test du conteneur'
