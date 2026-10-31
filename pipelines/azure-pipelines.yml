@@ -55,6 +55,24 @@ stages:
           - script: npm run lint --if-present
             displayName: 'Analyse du code (lint)'
 
+          - script: npm run test:coverage
+            displayName: 'Tests unitaires et couverture'
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results/junit.xml'
+              testRunTitle: 'Tests unitaires (Vitest)'
+              failTaskOnFailedTests: false
+            displayName: 'Publier les résultats des tests'
+
+          - task: PublishCodeCoverageResults@2
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: 'coverage/cobertura-coverage.xml'
+            displayName: 'Publier la couverture de code'
+
           - script: npm audit --audit-level=high
             displayName: 'Audit de sécurité des dépendances'
             continueOnError: true

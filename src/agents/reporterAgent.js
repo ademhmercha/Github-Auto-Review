@@ -25,7 +25,8 @@ ${issuesSummary}
   const text = await groq(apiKey, systemPrompt, userMessage);
   const report = parseModelJson(text, 'object');
 
-  const score = Number(report.score);
+  // Number(null) et Number('') valent 0 : on les traite comme « pas de score ».
+  const score = report.score == null || report.score === '' ? NaN : Number(report.score);
   return {
     score: Number.isFinite(score) ? Math.max(1, Math.min(10, score)) : 5,
     summary: String(report.summary ?? ''),
