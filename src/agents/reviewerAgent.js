@@ -1,4 +1,5 @@
 import { groq } from '../lib/groq.js';
+import { parseModelJson, normalizeSeverity } from '../lib/json.js';
 
 export async function reviewerAgent(explorerResult, apiKey) {
   const filesSummary = explorerResult.keyFiles
@@ -11,11 +12,13 @@ export async function reviewerAgent(explorerResult, apiKey) {
   const userMessage = `Review the following files from a ${explorerResult.framework} (${explorerResult.language}) project:\n\n${filesSummary}`;
 
   const text = await groq(apiKey, systemPrompt, userMessage);
+  const issues = parseModelJson(text, 'array');
 
-  try {
-    const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return JSON.parse(cleaned);
-  } catch {
-    return [];
-  }
+  return issues
+    .filter((i) => i && typeof i === 'object')
+    .map((i) => ({
+      severity: normalizeSeverity(i.severity),
+      file: String(i.file ?? 'unknown'),
+      description: String(i.description ?? ''),
+    }));
 }

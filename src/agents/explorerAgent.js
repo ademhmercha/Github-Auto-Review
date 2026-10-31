@@ -64,18 +64,31 @@ function sanitize(text) {
   return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }
 
+const SOURCE_EXT = /\.(jsx?|tsx?|py|go|rs|java|rb|php|cs|cpp|c|kt|swift|vue|svelte)$/i;
+const SKIP_PATH = /(^|\/)(node_modules|dist|build|vendor|\.next|__pycache__|tests?|__tests__)\/|\.min\.|\.d\.ts$|\.config\./i;
+const MAX_FILES = 5;
+
+async function githubFetch(url) {
+  const res = await fetch(url);
+  if (res.status === 403 || res.status === 429) {
+    throw new Error('GitHub rate limit reached (60 requests/hour without a token). Try again later.');
+  }
+  return res;
+}
+
 async function fetchFileContent(owner, repo, path) {
-  const res = await fetch(
+  const res = await githubFetch(
     `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
   );
   if (!res.ok) return null;
   const data = await res.json();
   if (data.encoding === 'base64' && data.content) {
     try {
-      const decoded = atob(data.content.replace(/\n/g, ''));
+      const binary = atob(data.content.replace(/\n/g, ''));
       // Skip binary files
-      if (decoded.includes('\x00')) return null;
-      return sanitize(decoded);
+      if (binary.includes('\x00')) return null;
+      const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+      return sanitize(new TextDecoder('utf-8').decode(bytes));
     } catch {
       return null;
     }
@@ -83,18 +96,26 @@ async function fetchFileContent(owner, repo, path) {
   return null;
 }
 
+/** Fills the remaining slots with the shallowest source files of the repo. */
+function pickSourceFiles(allFiles, alreadyPicked, slots) {
+  return allFiles
+    .filter((f) => SOURCE_EXT.test(f) && !SKIP_PATH.test(f) && !alreadyPicked.includes(f))
+    .sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b))
+    .slice(0, slots);
+}
+
 export async function explorerAgent(repoUrl) {
-  const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
+  const match = repoUrl.match(/github\.com\/([^/?#]+)\/([^/?#]+)/);
   if (!match) throw new Error('Invalid GitHub URL');
   const [, owner, repo] = match;
   const cleanRepo = repo.replace(/\.git$/, '');
 
   // Fetch repo tree
-  const treeRes = await fetch(
+  const treeRes = await githubFetch(
     `https://api.github.com/repos/${owner}/${cleanRepo}/git/trees/HEAD?recursive=1`
   );
   if (!treeRes.ok) {
-    const msg = treeRes.status === 404 ? 'Repository not found' : `GitHub API error: ${treeRes.status}`;
+    const msg = treeRes.status === 404 ? 'Repository not found (is it public?)' : `GitHub API error: ${treeRes.status}`;
     throw new Error(msg);
   }
   const treeData = await treeRes.json();
@@ -113,7 +134,8 @@ export async function explorerAgent(repoUrl) {
   const ordered = [
     ...priority.filter((f) => allFiles.includes(f)),
     ...extras,
-  ].slice(0, 5);
+  ].slice(0, MAX_FILES);
+  ordered.push(...pickSourceFiles(allFiles, ordered, MAX_FILES - ordered.length));
 
   const keyFiles = [];
   for (const path of ordered) {

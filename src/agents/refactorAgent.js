@@ -1,4 +1,5 @@
 import { groq } from '../lib/groq.js';
+import { parseModelJson } from '../lib/json.js';
 
 export async function refactorAgent(explorerResult, reviewerResult, apiKey) {
   const filesSummary = explorerResult.keyFiles
@@ -20,12 +21,17 @@ ${issuesSummary}
 **Source files:**
 ${filesSummary}`;
 
-  const text = await groq(apiKey, systemPrompt, userMessage);
+  const text = await groq(apiKey, systemPrompt, userMessage, { maxTokens: 3072 });
+  const suggestions = parseModelJson(text, 'array');
 
-  try {
-    const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return JSON.parse(cleaned);
-  } catch {
-    return [];
-  }
+  return suggestions
+    .filter((s) => s && typeof s === 'object')
+    .slice(0, 4)
+    .map((s) => ({
+      file: String(s.file ?? 'unknown'),
+      title: String(s.title ?? 'Suggestion'),
+      before: String(s.before ?? ''),
+      after: String(s.after ?? ''),
+      reason: String(s.reason ?? ''),
+    }));
 }

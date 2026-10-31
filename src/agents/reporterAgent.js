@@ -1,4 +1,5 @@
 import { groq } from '../lib/groq.js';
+import { parseModelJson } from '../lib/json.js';
 
 export async function reporterAgent(explorerResult, reviewerResult, docResult, apiKey) {
   const issuesSummary =
@@ -22,11 +23,12 @@ ${issuesSummary}
 **README status:** ${docResult.generatedReadme ? 'Missing or too short — a new README was generated.' : 'README is present.'}`;
 
   const text = await groq(apiKey, systemPrompt, userMessage);
+  const report = parseModelJson(text, 'object');
 
-  try {
-    const cleaned = text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    return JSON.parse(cleaned);
-  } catch {
-    return { score: 5, summary: 'Unable to generate summary.', priorities: [] };
-  }
+  const score = Number(report.score);
+  return {
+    score: Number.isFinite(score) ? Math.max(1, Math.min(10, score)) : 5,
+    summary: String(report.summary ?? ''),
+    priorities: Array.isArray(report.priorities) ? report.priorities.map(String) : [],
+  };
 }

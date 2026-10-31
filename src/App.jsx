@@ -19,12 +19,25 @@ export default function App() {
     setAgentStates(INITIAL_STATES);
     setScreen('results');
 
-    await runOrchestrator(repoUrl, apiKey, ({ agent, status, result, error }) => {
+    const onProgress = ({ agent, status, result, error }) => {
       setAgentStates((prev) => ({
         ...prev,
         [agent]: { status, result, error },
       }));
-    });
+    };
+
+    try {
+      await runOrchestrator(repoUrl, apiKey, onProgress);
+    } catch (err) {
+      // Never leave the pipeline hanging on an unexpected failure.
+      ['explorer', 'reviewer', 'doc', 'reporter', 'refactor'].forEach((agent) =>
+        setAgentStates((prev) =>
+          ['waiting', 'running'].includes(prev[agent]?.status)
+            ? { ...prev, [agent]: { status: 'error', error: err.message } }
+            : prev
+        )
+      );
+    }
   }, []);
 
   const handleReset = useCallback(() => {

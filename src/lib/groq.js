@@ -30,25 +30,36 @@ async function resolveModel(apiKey) {
   return model;
 }
 
-export async function groq(apiKey, systemPrompt, userMessage) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const MAX_RETRIES = 3;
+
+export async function groq(apiKey, systemPrompt, userMessage, { maxTokens = 2048 } = {}) {
   const model = await resolveModel(apiKey);
 
-  const res = await fetch(GROQ_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-      max_tokens: 1024,
-      temperature: 0.2,
-    }),
-  });
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    res = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userMessage },
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.2,
+      }),
+    });
+
+    // Free tier is rate limited: wait as long as Groq asks, then retry.
+    if (res.status !== 429 || attempt >= MAX_RETRIES) break;
+    const wait = Number(res.headers.get('retry-after'));
+    await sleep((Number.isFinite(wait) && wait > 0 ? Math.min(wait, 30) : 5 * (attempt + 1)) * 1000);
+  }
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

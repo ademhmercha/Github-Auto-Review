@@ -27,6 +27,6 @@ export async function docAgent(explorerResult, apiKey) {
 
 ${filesSummary || 'No source files available.'}`;
 
-  const generatedReadme = await groq(apiKey, systemPrompt, userMessage);
+  const generatedReadme = await groq(apiKey, systemPrompt, userMessage, { maxTokens: 3072 });
   return { generatedReadme, existingReadme: null };
 }
