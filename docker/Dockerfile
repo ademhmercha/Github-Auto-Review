@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---------- Étape 1 : build de l'application ----------
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 
 # Copier d'abord les fichiers de dépendances pour profiter du cache Docker
@@ -13,7 +13,12 @@ COPY . .
 RUN npm run build
 
 # ---------- Étape 2 : image finale légère ----------
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.28-alpine AS runtime
+
+# Applique les correctifs de sécurité Alpine publiés depuis la création de l'image de base
+USER root
+RUN apk upgrade --no-cache
+USER 101
 
 LABEL org.opencontainers.image.title="github-auto-review" \
       org.opencontainers.image.source="https://github.com/ademhmercha/Github-Auto-Review"

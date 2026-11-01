@@ -17,7 +17,7 @@ pr:
       - main
 
 variables:
-  nodeVersion: '20.x'
+  nodeVersion: '24.x'
   imageName: 'github-auto-review'
   imageTag: '$(Build.BuildId)'
   npm_config_cache: '$(Pipeline.Workspace)/.npm'
