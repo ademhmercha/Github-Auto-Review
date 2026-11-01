@@ -1,127 +1,163 @@
-# Template : plan puis apply Terraform pour un environnement (shared, dev ou prod)
-#
-# - Le plan tourne à chaque exécution (push et pull request).
-# - L'apply ne tourne que sur main, hors pull request, et seulement si le plan
-#   contient des changements. Il passe par un environnement Azure DevOps, ce qui
-#   permet d'exiger une approbation manuelle (pour la prod).
-# - Authentification : service connection OIDC (Workload Identity Federation),
-#   aucun secret stocké. Terraform utilise la session Azure CLI ouverte par AzureCLI@2.
+# Pipeline CI/CD - Github-Auto-Review
+# Se déclenche à chaque push sur main et à chaque pull request vers main.
 
-parameters:
-  - name: name
-    type: string
-  - name: adoEnvironment
-    type: string
-  - name: dependsOn
-    type: object
-    default: []
+trigger:
+  batch: true
+  branches:
+    include:
+      - main
+  paths:
+    exclude:
+      - '*.md'
+      - docs/*
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  nodeVersion: '20.x'
+  imageName: 'github-auto-review'
+  imageTag: '$(Build.BuildId)'
+  npm_config_cache: '$(Pipeline.Workspace)/.npm'
+  terraformVersion: '1.16.6'
+  gitleaksVersion: '8.21.2'
+  azureServiceConnection: 'sc-azure-gar'
 
 stages:
-  - stage: Infra_${{ parameters.name }}
-    displayName: 'Infra ${{ parameters.name }}'
-    dependsOn: ${{ parameters.dependsOn }}
-    variables:
-      workingDir: '$(Build.SourcesDirectory)/infra/environments/${{ parameters.name }}'
-      TF_IN_AUTOMATION: 'true'
-
+  - stage: CI
+    displayName: 'Intégration continue'
     jobs:
-      # ---------------------------------------------------------------- PLAN
-      - job: Plan
-        displayName: 'Terraform plan (${{ parameters.name }})'
+      # ------------------------------------------------------- SECRETS
+      - job: Secrets
+        displayName: 'Détection de secrets (Gitleaks)'
         pool:
-          vmImage: ubuntu-latest
+          vmImage: ubuntu-24.04
+
         steps:
+          # Historique complet : un secret supprimé reste lisible dans les anciens commits
           - checkout: self
-            fetchDepth: 1
+            fetchDepth: 0
+            displayName: "Récupérer le code et tout l'historique"
 
           - script: |
               set -euo pipefail
-              curl -sSLo terraform.zip "https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip"
-              unzip -oq terraform.zip -d "$(Agent.ToolsDirectory)/terraform"
-              echo "##vso[task.prependpath]$(Agent.ToolsDirectory)/terraform"
-            displayName: 'Installer Terraform $(terraformVersion)'
+              curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v$(gitleaksVersion)/gitleaks_$(gitleaksVersion)_linux_x64.tar.gz" \
+                | tar -xz -C "$(Agent.ToolsDirectory)" gitleaks
+              "$(Agent.ToolsDirectory)/gitleaks" version
+            displayName: 'Installer Gitleaks $(gitleaksVersion)'
 
-          - task: AzureCLI@2
-            name: plan
-            displayName: 'fmt, validate et plan'
-            inputs:
-              azureSubscription: $(azureServiceConnection)
-              scriptType: bash
-              scriptLocation: inlineScript
-              workingDirectory: $(workingDir)
-              inlineScript: |
-                set -euo pipefail
-                export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
-
-                terraform version
-                terraform fmt -check -recursive "$(Build.SourcesDirectory)/infra"
-                terraform init -input=false
-                terraform validate
-
-                # -detailed-exitcode : 0 = aucun changement, 1 = erreur, 2 = changements
-                set +e
-                terraform plan -input=false -lock-timeout=5m -detailed-exitcode -out=tfplan
-                code=$?
-                set -e
-
-                if [ "$code" -eq 1 ]; then
-                  echo "##vso[task.logissue type=error]Le plan Terraform a échoué."
-                  exit 1
-                fi
-
-                if [ "$code" -eq 2 ]; then hasChanges=true; else hasChanges=false; fi
-                echo "Changements à appliquer : $hasChanges"
-                echo "##vso[task.setvariable variable=hasChanges;isOutput=true]$hasChanges"
+          - script: |
+              "$(Agent.ToolsDirectory)/gitleaks" git . \
+                --redact \
+                --verbose \
+                --report-format sarif \
+                --report-path "$(Build.ArtifactStagingDirectory)/gitleaks.sarif" \
+                --exit-code 1
+            displayName: "Analyser le code et l'historique Git"
 
           - task: PublishPipelineArtifact@1
-            displayName: 'Publier le plan'
-            condition: and(succeeded(), eq(variables['plan.hasChanges'], 'true'))
+            condition: succeededOrFailed()
             inputs:
-              targetPath: '$(workingDir)/tfplan'
-              artifact: 'tfplan-${{ parameters.name }}'
+              targetPath: '$(Build.ArtifactStagingDirectory)/gitleaks.sarif'
+              artifact: 'rapport-gitleaks'
+            displayName: 'Publier le rapport Gitleaks'
 
-      # --------------------------------------------------------------- APPLY
-      - deployment: Apply
-        displayName: 'Terraform apply (${{ parameters.name }})'
-        dependsOn: Plan
-        condition: |
-          and(
-            succeeded(),
-            eq(dependencies.Plan.outputs['plan.hasChanges'], 'true'),
-            eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-            ne(variables['Build.Reason'], 'PullRequest')
-          )
-        environment: ${{ parameters.adoEnvironment }}
+      # --------------------------------------------------------- BUILD
+      - job: Build
+        displayName: 'Vérifier, compiler et conteneuriser'
+        dependsOn: Secrets
         pool:
-          vmImage: ubuntu-latest
-        strategy:
-          runOnce:
-            deploy:
-              steps:
-                - checkout: self
-                  fetchDepth: 1
+          vmImage: ubuntu-24.04
 
-                - download: current
-                  artifact: 'tfplan-${{ parameters.name }}'
+        steps:
+          - checkout: self
+            fetchDepth: 1
+            displayName: 'Récupérer le code'
 
-                - script: |
-                    set -euo pipefail
-                    curl -sSLo terraform.zip "https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip"
-                    unzip -oq terraform.zip -d "$(Agent.ToolsDirectory)/terraform"
-                    echo "##vso[task.prependpath]$(Agent.ToolsDirectory)/terraform"
-                  displayName: 'Installer Terraform $(terraformVersion)'
+          - task: UseNode@1
+            inputs:
+              version: '$(nodeVersion)'
+            displayName: 'Installer Node.js $(nodeVersion)'
 
-                - task: AzureCLI@2
-                  displayName: 'Terraform apply'
-                  inputs:
-                    azureSubscription: $(azureServiceConnection)
-                    scriptType: bash
-                    scriptLocation: inlineScript
-                    workingDirectory: $(workingDir)
-                    inlineScript: |
-                      set -euo pipefail
-                      export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+          - task: Cache@2
+            inputs:
+              key: 'npm | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: |
+                npm | "$(Agent.OS)"
+              path: '$(npm_config_cache)'
+            displayName: 'Cache des dépendances npm'
 
-                      terraform init -input=false
-                      # On applique exactement le plan relu et publié à l'étape précédente
-                      terraform apply -input=false -lock-timeout=5m "$(Pipeline.Workspace)/tfplan-${{ parameters.name }}/tfplan"
+          - script: npm ci
+            displayName: 'Installer les dépendances'
+
+          - script: npm run lint --if-present
+            displayName: 'Analyse du code (lint)'
+
+          - script: npm run test:coverage
+            displayName: 'Tests unitaires et couverture'
+
+          - task: PublishTestResults@2
+            condition: succeededOrFailed()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results/junit.xml'
+              testRunTitle: 'Tests unitaires (Vitest)'
+              failTaskOnFailedTests: false
+            displayName: 'Publier les résultats des tests'
+
+          - task: PublishCodeCoverageResults@2
+            condition: succeededOrFailed()
+            inputs:
+              summaryFileLocation: 'coverage/cobertura-coverage.xml'
+            displayName: 'Publier la couverture de code'
+
+          - script: npm audit --audit-level=high
+            displayName: 'Audit de sécurité des dépendances'
+            continueOnError: true
+
+          - script: npm run build
+            displayName: 'Build de production'
+
+          - script: |
+              docker build \
+                -f docker/Dockerfile \
+                -t $(imageName):$(imageTag) \
+                .
+            displayName: "Construire l'image Docker"
+
+          - script: |
+              docker run -d --name smoke -p 8080:8080 $(imageName):$(imageTag)
+              for i in $(seq 1 15); do
+                if curl -fs http://localhost:8080/healthz; then
+                  echo "Le conteneur répond correctement."
+                  exit 0
+                fi
+                sleep 2
+              done
+              echo "Le conteneur ne répond pas, voici ses logs :"
+              docker logs smoke
+              exit 1
+            displayName: 'Smoke test du conteneur'
+
+  # ------------------------------------------------------------------ INFRA
+  # Ordre imposé : shared (registre et plateforme), puis dev, puis prod
+
+  - template: templates/terraform.yml
+    parameters:
+      name: shared
+      adoEnvironment: infra-shared
+      dependsOn: [CI]
+
+  - template: templates/terraform.yml
+    parameters:
+      name: dev
+      adoEnvironment: infra-dev
+      dependsOn: [Infra_shared]
+
+  - template: templates/terraform.yml
+    parameters:
+      name: prod
+      adoEnvironment: infra-prod
+      dependsOn: [Infra_dev]
