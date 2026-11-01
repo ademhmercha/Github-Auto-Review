@@ -13,7 +13,7 @@ COPY . .
 RUN npm run build
 
 # ---------- Étape 2 : image finale légère ----------
-FROM nginxinc/nginx-unprivileged:1.28-alpine AS runtime
+FROM nginxinc/nginx-unprivileged:1.31-alpine AS runtime
 
 # Applique les correctifs de sécurité Alpine publiés depuis la création de l'image de base
 USER root
