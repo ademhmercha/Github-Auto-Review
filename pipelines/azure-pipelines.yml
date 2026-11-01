@@ -23,6 +23,7 @@ variables:
   npm_config_cache: '$(Pipeline.Workspace)/.npm'
   terraformVersion: '1.16.6'
   gitleaksVersion: '8.21.2'
+  trivyVersion: '0.56.2'
   azureServiceConnection: 'sc-azure-gar'
 
 stages:
@@ -126,6 +127,46 @@ stages:
                 -t $(imageName):$(imageTag) \
                 .
             displayName: "Construire l'image Docker"
+
+          # ---------------------------------------------- SCAN DE L'IMAGE
+          - script: |
+              set -euo pipefail
+              cd "$(Agent.TempDirectory)"
+              base="https://github.com/aquasecurity/trivy/releases/download/v$(trivyVersion)"
+              archive="trivy_$(trivyVersion)_Linux-64bit.tar.gz"
+              curl -sSLO "$base/$archive"
+              curl -sSLO "$base/trivy_$(trivyVersion)_checksums.txt"
+              # Vérifie que l'archive est exactement celle publiée par l'éditeur
+              grep " $archive\$" "trivy_$(trivyVersion)_checksums.txt" | sha256sum -c -
+              tar -xzf "$archive" -C "$(Agent.ToolsDirectory)" trivy
+              "$(Agent.ToolsDirectory)/trivy" --version
+            displayName: 'Installer Trivy $(trivyVersion) (empreinte vérifiée)'
+
+          - script: |
+              "$(Agent.ToolsDirectory)/trivy" image \
+                --scanners vuln \
+                --severity HIGH,CRITICAL \
+                --ignore-unfixed \
+                --exit-code 1 \
+                --format table \
+                $(imageName):$(imageTag)
+            displayName: "Scanner l'image (bloquant sur HIGH et CRITICAL)"
+
+          - script: |
+              "$(Agent.ToolsDirectory)/trivy" image \
+                --scanners vuln \
+                --format sarif \
+                --output "$(Build.ArtifactStagingDirectory)/trivy-image.sarif" \
+                $(imageName):$(imageTag)
+            condition: succeededOrFailed()
+            displayName: 'Rapport complet Trivy (toutes sévérités)'
+
+          - task: PublishPipelineArtifact@1
+            condition: succeededOrFailed()
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/trivy-image.sarif'
+              artifact: 'rapport-trivy-image'
+            displayName: 'Publier le rapport Trivy'
 
           - script: |
               docker run -d --name smoke -p 8080:8080 $(imageName):$(imageTag)
