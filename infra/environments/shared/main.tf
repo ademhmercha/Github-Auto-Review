@@ -26,3 +26,49 @@ resource "azurerm_container_registry" "acr" { # NOSONAR : pas d'identité néces
 
   tags = local.tags
 }
+
+# ---------------------------------------------------------------------------
+# Plateforme Container Apps partagée
+# L'abonnement Azure for Students n'autorise qu'un seul environnement Container
+# Apps (hors mode Express) : dev et prod y déploient chacun leur application.
+# ---------------------------------------------------------------------------
+
+# Espace Log Analytics de la plateforme : reçoit les logs de tous les conteneurs
+resource "azurerm_log_analytics_workspace" "platform" {
+  name                = "law-${local.name_prefix}"
+  location            = azurerm_resource_group.shared.location
+  resource_group_name = azurerm_resource_group.shared.name
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+  tags                = local.tags
+}
+
+# Environnement Container Apps partagé (plan Consumption, facturé à l'usage)
+resource "azurerm_container_app_environment" "platform" {
+  name                       = "cae-${local.name_prefix}"
+  location                   = azurerm_resource_group.shared.location
+  resource_group_name        = azurerm_resource_group.shared.name
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.platform.id
+  tags                       = local.tags
+
+  # Profil ajouté par Azure : le déclarer évite que Terraform veuille le retirer à chaque plan
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
+}
+
+# Azure crée désormais les environnements en mode "Express", qui ne permet ni
+# plusieurs révisions actives ni la répartition du trafic (blue-green).
+# Le provider azurerm ne gère pas encore ce réglage : on le force avec azapi.
+resource "azapi_resource_action" "environment_mode" {
+  type        = "Microsoft.App/managedEnvironments@2025-10-02-preview"
+  resource_id = azurerm_container_app_environment.platform.id
+  method      = "PATCH"
+
+  body = {
+    properties = {
+      environmentMode = "WorkloadProfiles"
+    }
+  }
+}

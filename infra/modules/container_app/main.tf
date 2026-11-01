@@ -13,21 +13,13 @@ resource "azurerm_role_assignment" "acr_pull" {
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
 
-# Environnement Container Apps (plan Consumption, facturé à l'usage)
-resource "azurerm_container_app_environment" "main" {
-  name                       = "cae-${var.name_prefix}"
-  location                   = var.location
-  resource_group_name        = var.resource_group_name
-  log_analytics_workspace_id = var.log_analytics_workspace_id
-  tags                       = var.tags
-}
-
-# L'application elle-même
+# L'application, déployée dans l'environnement Container Apps partagé
 resource "azurerm_container_app" "app" {
   name                         = "ca-${var.name_prefix}"
-  container_app_environment_id = azurerm_container_app_environment.main.id
+  container_app_environment_id = var.container_app_environment_id
   resource_group_name          = var.resource_group_name
   revision_mode                = var.revision_mode
+  workload_profile_name        = "Consumption"
   tags                         = var.tags
 
   identity {

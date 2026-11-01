@@ -17,3 +17,11 @@ output "acr_login_server" {
   description = "Adresse du registre, utilisée pour pousser et tirer les images."
   value       = azurerm_container_registry.acr.login_server
 }
+
+output "container_app_environment_id" {
+  description = "Identifiant de l'environnement Container Apps partagé (déjà converti en mode WorkloadProfiles)."
+  value       = azurerm_container_app_environment.platform.id
+
+  # Dev et prod ne doivent utiliser l'environnement qu'une fois la conversion terminée
+  depends_on = [azapi_resource_action.environment_mode]
+}

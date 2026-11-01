@@ -5,7 +5,7 @@ variable "name_prefix" {
 
 variable "location" {
   type        = string
-  description = "Région Azure."
+  description = "Région Azure (doit être celle de l'environnement Container Apps)."
 }
 
 variable "resource_group_name" {
@@ -13,9 +13,9 @@ variable "resource_group_name" {
   description = "Groupe de ressources de l'application."
 }
 
-variable "log_analytics_workspace_id" {
+variable "container_app_environment_id" {
   type        = string
-  description = "Espace Log Analytics qui reçoit les logs des conteneurs."
+  description = "Identifiant de l'environnement Container Apps partagé dans lequel déployer l'application."
 }
 
 variable "acr_id" {

@@ -29,10 +29,12 @@ module "monitoring" {
 module "app" {
   source = "../../modules/container_app"
 
-  name_prefix                = local.name_prefix
-  location                   = azurerm_resource_group.main.location
-  resource_group_name        = azurerm_resource_group.main.name
-  log_analytics_workspace_id = module.monitoring.log_analytics_workspace_id
+  name_prefix         = local.name_prefix
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+
+  # Environnement Container Apps partagé, lu dans l'état de shared
+  container_app_environment_id = data.terraform_remote_state.shared.outputs.container_app_environment_id
 
   acr_id           = data.terraform_remote_state.shared.outputs.acr_id
   acr_login_server = data.terraform_remote_state.shared.outputs.acr_login_server
