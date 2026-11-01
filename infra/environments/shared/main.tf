@@ -7,6 +7,16 @@ resource "azurerm_resource_group" "shared" {
 
 # Registre unique : l'image est construite une fois, puis promue de dev à prod
 resource "azurerm_container_registry" "acr" { # NOSONAR : pas d'identité nécessaire, voir commentaire plus bas
+  # Exceptions Checkov, revues et justifiées (contexte : abonnement étudiant, SKU Basic)
+  #checkov:skip=CKV_AZURE_139:Accès public requis par les agents hébergés d'Azure Pipelines. Désactivation possible uniquement en Premium avec endpoints privés. Accès authentifié par Entra ID, compte admin désactivé.
+  #checkov:skip=CKV_AZURE_163:Risque couvert : chaque image est scannée par Trivy dans le pipeline (bloquant sur HIGH et CRITICAL) avant publication.
+  #checkov:skip=CKV_AZURE_164:Content trust réservé au SKU Premium. Évolution prévue : signature des images dans le pipeline.
+  #checkov:skip=CKV_AZURE_165:Sans objet : application déployée dans une seule région.
+  #checkov:skip=CKV_AZURE_166:Risque couvert : seules des images déjà scannées par Trivy sont publiées par le pipeline.
+  #checkov:skip=CKV_AZURE_167:Politique de rétention réservée au SKU Premium. Volume d'images faible dans ce projet.
+  #checkov:skip=CKV_AZURE_233:Redondance de zone réservée au SKU Premium. Une indisponibilité du registre n'interrompt pas l'application déjà déployée.
+  #checkov:skip=CKV_AZURE_237:Points de terminaison de données dédiés réservés au SKU Premium, utiles surtout avec des réseaux privés.
+
   name                = "acr${var.project}${var.suffix}"
   resource_group_name = azurerm_resource_group.shared.name
   location            = azurerm_resource_group.shared.location
@@ -15,10 +25,8 @@ resource "azurerm_container_registry" "acr" { # NOSONAR : pas d'identité néces
   # Pas de compte admin avec mot de passe : accès uniquement par identités Azure
   admin_enabled = false
 
-  # Choix assumé : accès réseau public conservé. Désactiver l'accès public exige le SKU
-  # Premium et des endpoints privés (coûteux), et les agents hébergés d'Azure Pipelines
-  # doivent pouvoir pousser les images. Chaque accès reste authentifié par Entra ID.
-  public_network_access_enabled = true # NOSONAR : choix assumé, voir commentaire au-dessus
+  # Choix assumé : accès réseau public conservé (voir l'exception CKV_AZURE_139 ci-dessus)
+  public_network_access_enabled = true # NOSONAR : choix assumé, voir les exceptions Checkov ci-dessus
 
   # Pas de bloc identity : il ne servirait que si le registre devait lui-même accéder à
   # d'autres ressources (ex : clé de chiffrement dans Key Vault). Ce sont les applications

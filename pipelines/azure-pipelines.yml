@@ -24,8 +24,8 @@ variables:
   terraformVersion: '1.16.6'
   gitleaksVersion: '8.21.2'
   trivyVersion: '0.69.3'
-  azureServiceConnection: 'sc-azure-gar'
   checkovVersion: '3.3.30'
+  azureServiceConnection: 'sc-azure-gar'
 
 stages:
   - stage: CI
@@ -65,7 +65,8 @@ stages:
               targetPath: '$(Build.ArtifactStagingDirectory)/gitleaks.sarif'
               artifact: 'rapport-gitleaks'
             displayName: 'Publier le rapport Gitleaks'
-          # ----------------------------------------------- IaC (TERRAFORM)
+
+      # ----------------------------------------------- IaC (TERRAFORM)
       - job: IaC
         displayName: 'Sécurité du code Terraform (Checkov)'
         pool:
@@ -95,15 +96,16 @@ stages:
                 --compact \
                 --output cli \
                 --output sarif \
-                --output-file-path console,"$(Build.ArtifactStagingDirectory)"
+                --output-file-path console,"$(Build.ArtifactStagingDirectory)/checkov.sarif"
             displayName: 'Analyser le code Terraform'
 
           - task: PublishPipelineArtifact@1
             condition: succeededOrFailed()
             inputs:
-              targetPath: '$(Build.ArtifactStagingDirectory)/results_sarif.sarif'
+              targetPath: '$(Build.ArtifactStagingDirectory)'
               artifact: 'rapport-checkov'
             displayName: 'Publier le rapport Checkov'
+
       # --------------------------------------------------------- BUILD
       - job: Build
         displayName: 'Vérifier, compiler et conteneuriser'
