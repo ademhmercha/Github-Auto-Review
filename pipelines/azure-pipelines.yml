@@ -155,8 +155,13 @@ stages:
               summaryFileLocation: 'coverage/cobertura-coverage.xml'
             displayName: 'Publier la couverture de code'
 
+          # Bloquant : le code de ces dépendances est livré aux utilisateurs
+          - script: npm audit --omit=dev --audit-level=high
+            displayName: 'Audit des dépendances de production (bloquant)'
+
+          # Informatif : outils de build et de test, jamais livrés
           - script: npm audit --audit-level=high
-            displayName: 'Audit de sécurité des dépendances'
+            displayName: 'Audit de toutes les dépendances (informatif)'
             continueOnError: true
 
           - script: npm run build
