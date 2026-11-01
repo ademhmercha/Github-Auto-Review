@@ -1,4 +1,4 @@
-# Pipeline CI - Github-Auto-Review
+# Pipeline CI/CD - Github-Auto-Review
 # Se déclenche à chaque push sur main et à chaque pull request vers main.
 
 trigger:
@@ -21,6 +21,8 @@ variables:
   imageName: 'github-auto-review'
   imageTag: '$(Build.BuildId)'
   npm_config_cache: '$(Pipeline.Workspace)/.npm'
+  terraformVersion: '1.16.6'
+  azureServiceConnection: 'sc-azure-gar'
 
 stages:
   - stage: CI
@@ -100,3 +102,24 @@ stages:
               docker logs smoke
               exit 1
             displayName: 'Smoke test du conteneur'
+
+  # ------------------------------------------------------------------ INFRA
+  # Ordre imposé : shared (registre et plateforme), puis dev, puis prod
+
+  - template: templates/terraform.yml
+    parameters:
+      name: shared
+      adoEnvironment: infra-shared
+      dependsOn: [CI]
+
+  - template: templates/terraform.yml
+    parameters:
+      name: dev
+      adoEnvironment: infra-dev
+      dependsOn: [Infra_shared]
+
+  - template: templates/terraform.yml
+    parameters:
+      name: prod
+      adoEnvironment: infra-prod
+      dependsOn: [Infra_dev]
