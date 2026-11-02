@@ -1,0 +1,111 @@
+# Pipeline de ROLLBACK - Github-Auto-Review
+# Lancé uniquement à la main. Renvoie 100 % du trafic de la prod vers une révision
+# précédente, sans rien reconstruire ni redéployer.
+# Par défaut : la révision active la plus récente qui ne reçoit pas de trafic (blue).
+
+trigger: none
+pr: none
+
+parameters:
+  - name: targetRevision
+    displayName: 'Révision cible (laisser "auto" pour revenir à la version précédente)'
+    type: string
+    default: 'auto'
+
+variables:
+  azureServiceConnection: 'sc-azure-gar'
+  containerApp: 'ca-gar-prod'
+  resourceGroup: 'rg-gar-prod'
+
+stages:
+  - stage: Rollback_prod
+    displayName: 'Rollback prod'
+    jobs:
+      # Passe par l'environnement app-prod : approbation requise, et le rollback
+      # apparaît dans l'historique des déploiements de la prod.
+      - deployment: Rollback
+        displayName: 'Renvoyer le trafic vers une version précédente'
+        environment: app-prod
+        pool:
+          vmImage: ubuntu-24.04
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Basculer le trafic'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+
+                      app="$(containerApp)"
+                      rg="$(resourceGroup)"
+                      az extension add --name containerapp --upgrade --only-show-errors
+
+                      # ---------- 1. Version actuellement en production
+                      current="$(az containerapp ingress traffic show --name "$app" --resource-group "$rg" \
+                        --query "[?weight > \`0\`].revisionName | [0]" -o tsv)"
+                      echo "Version actuelle : $current"
+
+                      # ---------- 2. Version cible
+                      target="${{ parameters.targetRevision }}"
+                      if [ "$target" = "auto" ]; then
+                        # Révision active la plus récente, hors version actuelle
+                        target="$(az containerapp revision list --name "$app" --resource-group "$rg" \
+                          --query "sort_by([?properties.active && name != '$current'], &properties.createdTime)[-1].name" -o tsv)"
+                      fi
+
+                      if [ -z "$target" ] || [ "$target" = "None" ]; then
+                        echo "##vso[task.logissue type=error]Aucune version précédente disponible pour le rollback."
+                        exit 1
+                      fi
+                      if [ "$target" = "$current" ]; then
+                        echo "##vso[task.logissue type=error]La révision cible est déjà en production."
+                        exit 1
+                      fi
+                      echo "Version cible : $target"
+
+                      # ---------- 3. Réactiver la cible si elle a été désactivée
+                      active="$(az containerapp revision show --name "$app" --resource-group "$rg" \
+                        --revision "$target" --query properties.active -o tsv)"
+                      if [ "$active" != "true" ]; then
+                        echo "Réactivation de $target..."
+                        az containerapp revision activate --name "$app" --resource-group "$rg" \
+                          --revision "$target" --output none
+                      fi
+
+                      # ---------- 4. Vérifier que la cible est en bonne santé
+                      for i in $(seq 1 30); do
+                        health="$(az containerapp revision show --name "$app" --resource-group "$rg" \
+                          --revision "$target" --query properties.healthState -o tsv)"
+                        echo "Santé de la cible : $health"
+                        [ "$health" = "Healthy" ] && break
+                        if [ "$i" -eq 30 ]; then
+                          echo "##vso[task.logissue type=error]La cible n'est pas en bonne santé : trafic inchangé."
+                          exit 1
+                        fi
+                        sleep 10
+                      done
+
+                      # ---------- 5. Basculer 100 % du trafic vers la cible
+                      az containerapp ingress traffic set --name "$app" --resource-group "$rg" \
+                        --revision-weight "${target}=100" "${current}=0" --output none
+                      echo "Trafic basculé : 100 % sur $target."
+
+                      # ---------- 6. Vérifier l'URL principale
+                      fqdn="$(az containerapp show --name "$app" --resource-group "$rg" \
+                        --query properties.configuration.ingress.fqdn -o tsv)"
+                      for i in $(seq 1 12); do
+                        if curl -fsS --max-time 10 "https://${fqdn}/healthz"; then
+                          echo "Rollback terminé : $target sert 100 % du trafic sur https://${fqdn}"
+                          echo "##vso[build.addbuildtag]rollback-to-${target}"
+                          exit 0
+                        fi
+                        sleep 5
+                      done
+
+                      echo "##vso[task.logissue type=error]L'URL principale ne répond pas après le rollback."
+                      exit 1
