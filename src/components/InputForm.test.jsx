@@ -4,7 +4,8 @@ import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InputForm from './InputForm.jsx';
 
-const VALID_KEY = 'gsk_abcdefghijklmnopqrstuvwxyz0123456789';
+// Clé factice assemblée à l'exécution : aucun littéral ressemblant à un secret dans le dépôt
+const VALID_KEY = `gsk_${'a1B2'.repeat(10)}`;
 
 beforeEach(() => {
   localStorage.clear();

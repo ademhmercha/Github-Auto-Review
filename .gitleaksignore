@@ -1,0 +1,5 @@
+# Fausse clé Groq utilisée dans les tests de composants (aucun secret réel).
+# Le littéral a été retiré du code ; ces empreintes couvrent seulement le commit
+# historique qui le contenait. Format : commit:fichier:règle:ligne
+571d0e6891065bce362b2af0676cc89006bb1639:src/App.test.jsx:generic-api-key:10
+571d0e6891065bce362b2af0676cc89006bb1639:src/components/InputForm.test.jsx:generic-api-key:7
