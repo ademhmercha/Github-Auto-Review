@@ -14,7 +14,7 @@ export default defineConfig({
     outputFile: { junit: './test-results/junit.xml' },
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'cobertura', 'html'],
+      reporter: ['text', 'cobertura', 'html', 'lcov'],
       reportsDirectory: './coverage',
       // Couverture de la logique métier ; l'interface React n'est pas testée ici.
       include: ['src/agents/**', 'src/lib/**', 'src/orchestrator/**'],

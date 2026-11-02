@@ -26,6 +26,8 @@ variables:
   trivyVersion: '0.69.3'
   checkovVersion: '3.3.30'
   azureServiceConnection: 'sc-azure-gar'
+  sonarOrganization: 'ademhmercha'
+  sonarProjectKey: 'ademhmercha_Github-Auto-Review'
 
 stages:
   - stage: CI
@@ -114,8 +116,9 @@ stages:
           vmImage: ubuntu-24.04
 
         steps:
+          # Historique complet : SonarQube Cloud en a besoin pour détecter le nouveau code
           - checkout: self
-            fetchDepth: 1
+            fetchDepth: 0
             displayName: 'Récupérer le code'
 
           - task: UseNode@1
@@ -133,6 +136,21 @@ stages:
 
           - script: npm ci
             displayName: 'Installer les dépendances'
+
+          - task: SonarCloudPrepare@3
+            inputs:
+              SonarCloud: 'sc-sonarcloud'
+              organization: '$(sonarOrganization)'
+              scannerMode: 'cli'
+              configMode: 'manual'
+              cliProjectKey: '$(sonarProjectKey)'
+              cliProjectName: 'Github-Auto-Review'
+              cliSources: 'src'
+              extraProperties: |
+                sonar.tests=src
+                sonar.test.inclusions=**/*.test.js,**/*.test.jsx
+                sonar.javascript.lcov.reportPaths=coverage/lcov.info
+            displayName: "Préparer l'analyse SonarQube Cloud"
 
           - script: npm run lint --if-present
             displayName: 'Analyse du code (lint)'
@@ -154,6 +172,14 @@ stages:
             inputs:
               summaryFileLocation: 'coverage/cobertura-coverage.xml'
             displayName: 'Publier la couverture de code'
+
+          - task: SonarCloudAnalyze@3
+            displayName: 'Analyser le code (SonarQube Cloud)'
+
+          - task: SonarCloudPublish@3
+            inputs:
+              pollingTimeoutSec: '300'
+            displayName: 'Publier le résultat du quality gate'
 
           # Bloquant : le code de ces dépendances est livré aux utilisateurs
           - script: npm audit --omit=dev --audit-level=high
