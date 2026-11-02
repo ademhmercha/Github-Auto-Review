@@ -26,7 +26,7 @@ ${issuesSummary}
   const report = parseModelJson(text, 'object');
 
   // Number(null) et Number('') valent 0 : on les traite comme « pas de score ».
-  const score = report.score == null || report.score === '' ? NaN : Number(report.score);
+  const score = report.score == null || report.score === '' ? Number.NaN : Number(report.score);
   return {
     score: Number.isFinite(score) ? Math.max(1, Math.min(10, score)) : 5,
     summary: String(report.summary ?? ''),

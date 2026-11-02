@@ -57,6 +57,12 @@ function DiffDemo() {
   );
 }
 
+// Une clé Groq ne contient que des caractères alphanumériques après "gsk_".
+// Valider avant d'écrire dans localStorage, et à la relecture, empêche d'y
+// stocker (ou d'y relire) une valeur arbitraire.
+const GROQ_KEY_SOURCE = 'gsk_[A-Za-z0-9]{16,}';
+const GROQ_KEY_PATTERN = new RegExp(`^${GROQ_KEY_SOURCE}$`);
+
 export default function InputForm({ onAnalyze }) {
   const [apiKey, setApiKey] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
@@ -64,14 +70,17 @@ export default function InputForm({ onAnalyze }) {
 
   useEffect(() => {
     const saved = localStorage.getItem('groq_api_key');
-    if (saved) setApiKey(saved);
+    if (saved && GROQ_KEY_PATTERN.test(saved)) setApiKey(saved);
+    else if (saved) localStorage.removeItem('groq_api_key');
   }, []);
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!apiKey.trim() || !repoUrl.trim()) return;
-    localStorage.setItem('groq_api_key', apiKey.trim());
-    onAnalyze(repoUrl.trim(), apiKey.trim());
+    const key = apiKey.trim();
+    const url = repoUrl.trim();
+    if (!key || !url || !GROQ_KEY_PATTERN.test(key)) return;
+    localStorage.setItem('groq_api_key', key);
+    onAnalyze(url, key);
   }
 
   return (
@@ -158,6 +167,8 @@ export default function InputForm({ onAnalyze }) {
                   onChange={(e) => setApiKey(e.target.value)}
                   placeholder="gsk_..."
                   className="field pr-14"
+                  pattern={GROQ_KEY_SOURCE}
+                  title="Une clé Groq commence par gsk_ suivi de lettres et de chiffres"
                   required
                 />
                 <span className="field-line" />
