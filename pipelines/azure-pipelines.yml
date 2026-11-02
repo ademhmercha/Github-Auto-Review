@@ -402,3 +402,141 @@ stages:
 
                       echo "##vso[task.logissue type=error]L'application de dev ne répond pas après 5 minutes."
                       exit 1
+
+  # ----------------------------------------------------- DÉPLOIEMENT PROD
+  # Blue-green : la nouvelle version (green) démarre avec 0 % du trafic, est testée
+  # sur l'URL de sa révision, puis reçoit 100 % du trafic. L'ancienne (blue) reste
+  # active pour un retour arrière instantané.
+  # Requiert l'approbation configurée sur l'environnement Azure DevOps "app-prod".
+  - stage: Deploy_prod
+    displayName: 'Déploiement prod (blue-green)'
+    dependsOn: [CI, Deploy_dev, Infra_prod]
+    condition: |
+      and(
+        succeeded(),
+        eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+        ne(variables['Build.Reason'], 'PullRequest')
+      )
+    variables:
+      releaseTag: $[ stageDependencies.CI.Build.outputs['publish.imageTag'] ]
+      containerApp: 'ca-gar-prod'
+      resourceGroup: 'rg-gar-prod'
+
+    jobs:
+      - deployment: Deploy
+        displayName: 'Déployer en prod (blue-green)'
+        environment: app-prod
+        pool:
+          vmImage: ubuntu-24.04
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Blue-green : déployer, tester, basculer'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+
+                      app="$(containerApp)"
+                      rg="$(resourceGroup)"
+
+                      if [ -z "$(releaseTag)" ]; then
+                        echo "##vso[task.logissue type=error]Aucun tag d'image reçu du stage CI."
+                        exit 1
+                      fi
+
+                      az extension add --name containerapp --upgrade --only-show-errors
+
+                      image="$(acrLoginServer)/$(imageName):$(releaseTag)"
+                      green="${app}--v$(releaseTag)"
+
+                      # ---------- 1. Identifier la version actuelle (blue)
+                      blue="$(az containerapp ingress traffic show --name "$app" --resource-group "$rg" \
+                        --query "[?weight > \`0\`].revisionName | [0]" -o tsv)"
+                      if [ -z "$blue" ] || [ "$blue" = "None" ]; then
+                        # Le trafic suit encore "la dernière révision" : on récupère son nom
+                        blue="$(az containerapp show --name "$app" --resource-group "$rg" \
+                          --query properties.latestReadyRevisionName -o tsv)"
+                      fi
+                      echo "Version actuelle (blue) : $blue"
+                      echo "Nouvelle version (green) : $green"
+
+                      if [ "$blue" = "$green" ]; then
+                        echo "Cette version est déjà en production, rien à faire."
+                        exit 0
+                      fi
+
+                      # ---------- 2. Figer 100 % du trafic sur blue
+                      az containerapp ingress traffic set --name "$app" --resource-group "$rg" \
+                        --revision-weight "${blue}=100" --output none
+                      echo "Trafic figé sur blue."
+
+                      # ---------- 3. Déployer green (0 % du trafic)
+                      az containerapp update --name "$app" --resource-group "$rg" \
+                        --image "$image" --revision-suffix "v$(releaseTag)" --output none
+                      echo "Green déployée, sans trafic."
+
+                      # ---------- 4. Attendre que green soit en bonne santé
+                      for i in $(seq 1 30); do
+                        health="$(az containerapp revision show --name "$app" --resource-group "$rg" \
+                          --revision "$green" --query properties.healthState -o tsv)"
+                        echo "Santé de green : $health"
+                        [ "$health" = "Healthy" ] && break
+                        if [ "$i" -eq 30 ]; then
+                          echo "##vso[task.logissue type=error]Green n'est pas en bonne santé. Blue continue de servir 100 % du trafic."
+                          exit 1
+                        fi
+                        sleep 10
+                      done
+
+                      # ---------- 5. Tester green sur l'URL de sa révision
+                      greenFqdn="$(az containerapp revision show --name "$app" --resource-group "$rg" \
+                        --revision "$green" --query properties.fqdn -o tsv)"
+                      echo "Test de green : https://${greenFqdn}/healthz"
+                      ok=false
+                      for i in $(seq 1 12); do
+                        if curl -fsS --max-time 10 "https://${greenFqdn}/healthz"; then ok=true; break; fi
+                        sleep 5
+                      done
+                      if [ "$ok" != "true" ]; then
+                        echo "##vso[task.logissue type=error]Green ne répond pas. Blue continue de servir 100 % du trafic."
+                        exit 1
+                      fi
+
+                      # ---------- 6. Basculer 100 % du trafic vers green
+                      az containerapp ingress traffic set --name "$app" --resource-group "$rg" \
+                        --revision-weight "${green}=100" "${blue}=0" --output none
+                      echo "Trafic basculé : 100 % sur green."
+
+                      # ---------- 7. Vérifier l'URL principale
+                      fqdn="$(az containerapp show --name "$app" --resource-group "$rg" \
+                        --query properties.configuration.ingress.fqdn -o tsv)"
+                      ok=false
+                      for i in $(seq 1 12); do
+                        if curl -fsS --max-time 10 "https://${fqdn}/healthz"; then ok=true; break; fi
+                        sleep 5
+                      done
+                      if [ "$ok" != "true" ]; then
+                        echo "##vso[task.logissue type=error]L'URL principale ne répond pas : retour du trafic vers blue."
+                        az containerapp ingress traffic set --name "$app" --resource-group "$rg" \
+                          --revision-weight "${blue}=100" "${green}=0" --output none
+                        exit 1
+                      fi
+
+                      # ---------- 8. Garder blue pour le rollback, désactiver le reste
+                      for rev in $(az containerapp revision list --name "$app" --resource-group "$rg" \
+                          --query "[?properties.active].name" -o tsv); do
+                        if [ "$rev" != "$green" ] && [ "$rev" != "$blue" ]; then
+                          echo "Désactivation de l'ancienne révision : $rev"
+                          az containerapp revision deactivate --name "$app" --resource-group "$rg" \
+                            --revision "$rev" --output none
+                        fi
+                      done
+
+                      echo "Déploiement terminé : https://${fqdn}"
+                      echo "En production : $green | Prête pour un rollback : $blue"
+                      echo "##vso[build.addbuildtag]prod-$(releaseTag)"
