@@ -79,3 +79,8 @@ variable "tags" {
   description = "Tags appliqués aux ressources."
   default     = {}
 }
+variable "max_inactive_revisions" {
+  type        = number
+  description = "Nombre de révisions inactives conservées, pour pouvoir revenir à une ancienne version."
+  default     = 5
+}
