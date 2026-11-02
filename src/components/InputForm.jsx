@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 const AGENTS = [
   ['01', 'Explorer', 'maps the structure'],
@@ -63,16 +63,17 @@ function DiffDemo() {
 const GROQ_KEY_SOURCE = 'gsk_[A-Za-z0-9]{16,}';
 const GROQ_KEY_PATTERN = new RegExp(`^${GROQ_KEY_SOURCE}$`);
 
+function readStoredKey() {
+  const saved = localStorage.getItem('groq_api_key');
+  if (saved && GROQ_KEY_PATTERN.test(saved)) return saved;
+  if (saved) localStorage.removeItem('groq_api_key');
+  return '';
+}
+
 export default function InputForm({ onAnalyze }) {
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(readStoredKey);
   const [repoUrl, setRepoUrl] = useState('');
   const [showKey, setShowKey] = useState(false);
-
-  useEffect(() => {
-    const saved = localStorage.getItem('groq_api_key');
-    if (saved && GROQ_KEY_PATTERN.test(saved)) setApiKey(saved);
-    else if (saved) localStorage.removeItem('groq_api_key');
-  }, []);
 
   function handleSubmit(e) {
     e.preventDefault();

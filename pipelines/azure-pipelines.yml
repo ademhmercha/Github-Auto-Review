@@ -152,7 +152,7 @@ stages:
                 sonar.javascript.lcov.reportPaths=coverage/lcov.info
             displayName: "Préparer l'analyse SonarQube Cloud"
 
-          - script: npm run lint --if-present
+          - script: npm run lint
             displayName: 'Analyse du code (lint)'
 
           - script: npm run test:coverage

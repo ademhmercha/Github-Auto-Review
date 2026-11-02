@@ -61,6 +61,7 @@ function detectLanguage(fileNames) {
 
 function sanitize(text) {
   // Remove null bytes and non-printable control chars (keep newlines/tabs)
+  // eslint-disable-next-line no-control-regex -- les caractères de contrôle sont précisément ce qu'on retire
   return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
 }
 

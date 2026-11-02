@@ -1,5 +1,7 @@
 # GitHub AutoReview Agent
 
+[![Build Status](https://dev.azure.com/AdemOrg/Github-Auto-Review/_apis/build/status%2FCI%20-%20Github-Auto-Review?branchName=main)](https://dev.azure.com/AdemOrg/Github-Auto-Review/_build/latest?definitionId=1&branchName=main) [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=ademhmercha_Github-Auto-Review&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=ademhmercha_Github-Auto-Review) [![Security](https://sonarcloud.io/api/project_badges/measure?project=ademhmercha_Github-Auto-Review&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=ademhmercha_Github-Auto-Review) [![Reliability](https://sonarcloud.io/api/project_badges/measure?project=ademhmercha_Github-Auto-Review&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=ademhmercha_Github-Auto-Review) [![Maintainability](https://sonarcloud.io/api/project_badges/measure?project=ademhmercha_Github-Auto-Review&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=ademhmercha_Github-Auto-Review) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=ademhmercha_Github-Auto-Review&metric=coverage)](https://sonarcloud.io/summary/new_code?id=ademhmercha_Github-Auto-Review)
+
 An AI-powered code audit tool that analyzes any public GitHub repository using 5 specialized agents running in sequence. Built with React + Vite + Tailwind CSS, deployable on Vercel — no backend required.
 
 ## Features

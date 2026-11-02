@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { explorerAgent } from './explorerAgent.js';
 
 const API = 'https://api.github.com/repos/octo/demo';

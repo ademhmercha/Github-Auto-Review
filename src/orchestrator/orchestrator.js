@@ -7,11 +7,12 @@ import { refactorAgent } from '../agents/refactorAgent.js';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function runOrchestrator(repoUrl, apiKey, onProgress) {
-  let explorerResult = null;
-  let reviewerResult = [];
-  let docResult = { generatedReadme: null };
-  let reporterResult = null;
-  let refactorResult = [];
+  // Chaque résultat est affecté dans le try ou, à défaut, dans le catch de son agent
+  let explorerResult;
+  let reviewerResult;
+  let docResult;
+  let reporterResult;
+  let refactorResult;
 
   // Agent 1: Explorer (no API call)
   onProgress({ agent: 'explorer', status: 'running' });
