@@ -9,15 +9,15 @@ export default defineConfig({
   test: {
     // La logique testée (agents, appels API, parsing) ne touche pas au DOM.
     environment: 'node',
-    include: ['src/**/*.test.js'],
+    include: ['src/**/*.test.{js,jsx}'],
     reporters: ['default', 'junit'],
     outputFile: { junit: './test-results/junit.xml' },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'cobertura', 'html', 'lcov'],
       reportsDirectory: './coverage',
-      // Couverture de la logique métier ; l'interface React n'est pas testée ici.
-      include: ['src/agents/**', 'src/lib/**', 'src/orchestrator/**'],
+      // Logique métier et interface React (tests de composants en jsdom).
+      include: ['src/agents/**', 'src/lib/**', 'src/orchestrator/**', 'src/components/**', 'src/App.jsx', 'src/main.jsx'],
     },
   },
 });
