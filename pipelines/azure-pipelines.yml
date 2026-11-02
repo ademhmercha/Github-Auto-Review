@@ -149,7 +149,9 @@ stages:
               extraProperties: |
                 sonar.tests=src
                 sonar.test.inclusions=**/*.test.js,**/*.test.jsx
+                sonar.exclusions=**/*.test.js,**/*.test.jsx
                 sonar.javascript.lcov.reportPaths=coverage/lcov.info
+                sonar.qualitygate.wait=true
             displayName: "Préparer l'analyse SonarQube Cloud"
 
           - script: npm run lint
