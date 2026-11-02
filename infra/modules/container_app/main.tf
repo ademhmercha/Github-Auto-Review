@@ -20,6 +20,7 @@ resource "azurerm_container_app" "app" {
   resource_group_name          = var.resource_group_name
   revision_mode                = var.revision_mode
   workload_profile_name        = "Consumption"
+  max_inactive_revisions       = var.max_inactive_revisions
   tags                         = var.tags
 
   identity {
@@ -68,10 +69,12 @@ resource "azurerm_container_app" "app" {
   }
 
   # Terraform crée l'application, mais c'est le pipeline qui déploie les nouvelles
-  # images et répartit le trafic (blue-green). Terraform ne doit pas annuler ces changements.
+  # versions (image et suffixe de révision) et répartit le trafic (blue-green).
+  # Terraform ne doit pas annuler ces changements.
   lifecycle {
     ignore_changes = [
       template[0].container[0].image,
+      template[0].revision_suffix,
       ingress[0].traffic_weight,
     ]
   }
