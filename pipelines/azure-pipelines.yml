@@ -28,6 +28,8 @@ variables:
   azureServiceConnection: 'sc-azure-gar'
   sonarOrganization: 'ademhmercha'
   sonarProjectKey: 'ademhmercha_Github-Auto-Review'
+  acrName: 'acrgar10137'
+  acrLoginServer: 'acrgar10137.azurecr.io'
 
 stages:
   - stage: CI
@@ -256,6 +258,44 @@ stages:
               docker logs smoke
               exit 1
             displayName: 'Smoke test du conteneur'
+
+          # ------------------------------------- PUBLICATION DE L'IMAGE
+          # Uniquement sur main (pas sur les pull requests), et seulement si
+          # toutes les barrières précédentes sont passées.
+          - task: AzureCLI@2
+            name: publish
+            displayName: "Publier l'image dans le registre ACR"
+            condition: |
+              and(
+                succeeded(),
+                eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+                ne(variables['Build.Reason'], 'PullRequest')
+              )
+            inputs:
+              azureSubscription: $(azureServiceConnection)
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+
+                # Tag unique et traçable : numéro de build + commit court
+                tag="$(Build.BuildId)-${BUILD_SOURCEVERSION:0:7}"
+                remote="$(acrLoginServer)/$(imageName):${tag}"
+
+                # Connexion au registre avec l'identité OIDC du pipeline (aucun mot de passe)
+                az acr login --name "$(acrName)"
+
+                docker tag "$(imageName):$(imageTag)" "$remote"
+                docker push "$remote"
+
+                digest="$(docker inspect --format='{{index .RepoDigests 0}}' "$remote")"
+                echo "Image publiée : $remote"
+                echo "Empreinte     : $digest"
+
+                # Rend le tag disponible pour les stages de déploiement
+                echo "##vso[task.setvariable variable=imageTag;isOutput=true]$tag"
+                # Étiquette l'exécution du pipeline avec la version publiée
+                echo "##vso[build.addbuildtag]image-$tag"
 
   # ------------------------------------------------------------------ INFRA
   # Ordre imposé : shared (registre et plateforme), puis dev, puis prod
