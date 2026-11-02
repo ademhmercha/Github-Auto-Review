@@ -317,3 +317,88 @@ stages:
       name: prod
       adoEnvironment: infra-prod
       dependsOn: [Infra_dev]
+
+  # ------------------------------------------------------------ DÉPLOIEMENT DEV
+  # Déploie en dev l'image publiée par le stage CI, puis la teste sur son URL réelle.
+  # Uniquement sur main, jamais pour une pull request.
+  - stage: Deploy_dev
+    displayName: 'Déploiement dev'
+    dependsOn: [CI, Infra_dev]
+    condition: |
+      and(
+        succeeded(),
+        eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+        ne(variables['Build.Reason'], 'PullRequest')
+      )
+    variables:
+      # Tag publié par l'étape "publish" du job Build (stage CI)
+      releaseTag: $[ stageDependencies.CI.Build.outputs['publish.imageTag'] ]
+      containerApp: 'ca-gar-dev'
+      resourceGroup: 'rg-gar-dev'
+
+    jobs:
+      - deployment: Deploy
+        displayName: 'Déployer en dev'
+        environment: app-dev
+        pool:
+          vmImage: ubuntu-24.04
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: 'Déployer la nouvelle image'
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+
+                      if [ -z "$(releaseTag)" ]; then
+                        echo "##vso[task.logissue type=error]Aucun tag d'image reçu du stage CI."
+                        exit 1
+                      fi
+
+                      az extension add --name containerapp --upgrade --only-show-errors
+
+                      image="$(acrLoginServer)/$(imageName):$(releaseTag)"
+                      echo "Déploiement de $image sur $(containerApp)"
+
+                      # Crée une nouvelle révision nommée d'après la version déployée
+                      az containerapp update \
+                        --name "$(containerApp)" \
+                        --resource-group "$(resourceGroup)" \
+                        --image "$image" \
+                        --revision-suffix "v$(releaseTag)" \
+                        --output none
+
+                      revision="$(az containerapp show --name "$(containerApp)" --resource-group "$(resourceGroup)" --query properties.latestRevisionName -o tsv)"
+                      echo "Nouvelle révision : $revision"
+
+                - task: AzureCLI@2
+                  displayName: "Smoke test sur l'URL réelle"
+                  inputs:
+                    azureSubscription: $(azureServiceConnection)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      az extension add --name containerapp --upgrade --only-show-errors
+
+                      fqdn="$(az containerapp show --name "$(containerApp)" --resource-group "$(resourceGroup)" --query properties.configuration.ingress.fqdn -o tsv)"
+                      url="https://${fqdn}/healthz"
+                      echo "Test de $url"
+
+                      # Le dev peut être éteint (0 instance) : on laisse le temps au démarrage à froid
+                      for i in $(seq 1 30); do
+                        if curl -fsS --max-time 10 "$url"; then
+                          echo "L'application de dev répond correctement : https://${fqdn}"
+                          exit 0
+                        fi
+                        echo "Tentative $i : pas encore de réponse, nouvel essai dans 10 secondes..."
+                        sleep 10
+                      done
+
+                      echo "##vso[task.logissue type=error]L'application de dev ne répond pas après 5 minutes."
+                      exit 1
