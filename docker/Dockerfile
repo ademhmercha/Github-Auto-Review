@@ -23,7 +23,10 @@ USER 101
 LABEL org.opencontainers.image.title="github-auto-review" \
       org.opencontainers.image.source="https://github.com/ademhmercha/Github-Auto-Review"
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Modèle traité par envsubst au démarrage : la configuration vient de l'environnement
+# du conteneur (une seule image pour dev et prod), jamais du build
+COPY docker/nginx.conf /etc/nginx/templates/default.conf.template
+ENV APPINSIGHTS_CONNECTION_STRING=""
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # L'image unprivileged tourne déjà en utilisateur non root, sur le port 8080
