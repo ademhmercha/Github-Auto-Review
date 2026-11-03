@@ -24,3 +24,32 @@ variable "tags" {
   description = "Tags appliqués aux ressources."
   default     = {}
 }
+
+variable "enable_availability_test" {
+  type        = bool
+  description = "Active le test de disponibilité et l'alerte (à éviter sur un environnement qui s'éteint quand il n'est pas utilisé)."
+  default     = false
+}
+
+variable "availability_url" {
+  type        = string
+  description = "URL testée par le test de disponibilité (ex : https://.../healthz)."
+  default     = null
+}
+
+variable "availability_frequency" {
+  type        = number
+  description = "Fréquence du test en secondes (300, 600 ou 900). Chaque exécution est facturée, par région."
+  default     = 900
+
+  validation {
+    condition     = contains([300, 600, 900], var.availability_frequency)
+    error_message = "La fréquence doit valoir 300, 600 ou 900 secondes."
+  }
+}
+
+variable "alert_email" {
+  type        = string
+  description = "Adresse e-mail qui reçoit les alertes. Fournie par le pipeline, jamais écrite dans le dépôt."
+  default     = null
+}

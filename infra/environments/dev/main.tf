@@ -1,4 +1,4 @@
-# Lecture des outputs de l'environnement shared (le registre)
+# Lecture des outputs de l'environnement shared (le registre et la plateforme)
 data "terraform_remote_state" "shared" {
   backend = "azurerm"
 
@@ -24,6 +24,11 @@ module "monitoring" {
   resource_group_name = azurerm_resource_group.main.name
   retention_in_days   = var.log_retention_days
   tags                = local.tags
+
+  # Test de disponibilité et alerte sur l'URL réelle de l'application
+  enable_availability_test = var.enable_availability_test
+  availability_url         = "https://${module.app.fqdn}/healthz"
+  alert_email              = var.alert_email
 }
 
 module "app" {
