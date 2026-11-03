@@ -51,3 +51,15 @@ variable "log_retention_days" {
   description = "Durée de conservation des logs, en jours."
   default     = 30
 }
+
+variable "enable_availability_test" {
+  type        = bool
+  description = "Active le test de disponibilité et l'alerte e-mail."
+  default     = false
+}
+
+variable "alert_email" {
+  type        = string
+  description = "Adresse e-mail des alertes, fournie par la variable d'environnement TF_VAR_alert_email."
+  default     = null
+}
