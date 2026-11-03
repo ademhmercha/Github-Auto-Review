@@ -69,11 +69,12 @@ resource "azurerm_container_app" "app" {
   }
 
   # Terraform crée l'application, mais c'est le pipeline qui déploie les nouvelles
-  # versions (image et suffixe de révision) et répartit le trafic (blue-green).
-  # Terraform ne doit pas annuler ces changements.
+  # versions (image, suffixe de révision, variables d'environnement) et répartit
+  # le trafic (blue-green). Terraform ne doit pas annuler ces changements.
   lifecycle {
     ignore_changes = [
       template[0].container[0].image,
+      template[0].container[0].env,
       template[0].revision_suffix,
       ingress[0].traffic_weight,
     ]
