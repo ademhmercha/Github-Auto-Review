@@ -336,6 +336,7 @@ stages:
       releaseTag: $[ stageDependencies.CI.Build.outputs['publish.imageTag'] ]
       containerApp: 'ca-gar-dev'
       resourceGroup: 'rg-gar-dev'
+      appInsights: 'appi-gar-dev'
 
     jobs:
       - deployment: Deploy
@@ -362,9 +363,15 @@ stages:
                       fi
 
                       az extension add --name containerapp --upgrade --only-show-errors
+                      az extension add --name application-insights --upgrade --only-show-errors
 
                       image="$(acrLoginServer)/$(imageName):$(releaseTag)"
                       echo "Déploiement de $image sur $(containerApp)"
+
+                      # Configuration d'exécution : la même image, mais la télémétrie de
+                      # chaque environnement part vers son propre Application Insights
+                      aiConnection="$(az monitor app-insights component show --app "$(appInsights)" \
+                        --resource-group "$(resourceGroup)" --query connectionString -o tsv)"
 
                       # Crée une nouvelle révision nommée d'après la version déployée
                       az containerapp update \
@@ -372,6 +379,7 @@ stages:
                         --resource-group "$(resourceGroup)" \
                         --image "$image" \
                         --revision-suffix "v$(releaseTag)" \
+                        --set-env-vars "APPINSIGHTS_CONNECTION_STRING=${aiConnection}" \
                         --output none
 
                       revision="$(az containerapp show --name "$(containerApp)" --resource-group "$(resourceGroup)" --query properties.latestRevisionName -o tsv)"
@@ -422,6 +430,7 @@ stages:
       releaseTag: $[ stageDependencies.CI.Build.outputs['publish.imageTag'] ]
       containerApp: 'ca-gar-prod'
       resourceGroup: 'rg-gar-prod'
+      appInsights: 'appi-gar-prod'
 
     jobs:
       - deployment: Deploy
@@ -451,9 +460,14 @@ stages:
                       fi
 
                       az extension add --name containerapp --upgrade --only-show-errors
+                      az extension add --name application-insights --upgrade --only-show-errors
 
                       image="$(acrLoginServer)/$(imageName):$(releaseTag)"
                       green="${app}--v$(releaseTag)"
+
+                      # Configuration d'exécution : chaîne de connexion de l'Application Insights de la prod
+                      aiConnection="$(az monitor app-insights component show --app "$(appInsights)" \
+                        --resource-group "$rg" --query connectionString -o tsv)"
 
                       # ---------- 1. Identifier la version actuelle (blue)
                       blue="$(az containerapp ingress traffic show --name "$app" --resource-group "$rg" \
@@ -478,7 +492,9 @@ stages:
 
                       # ---------- 3. Déployer green (0 % du trafic)
                       az containerapp update --name "$app" --resource-group "$rg" \
-                        --image "$image" --revision-suffix "v$(releaseTag)" --output none
+                        --image "$image" --revision-suffix "v$(releaseTag)" \
+                        --set-env-vars "APPINSIGHTS_CONNECTION_STRING=${aiConnection}" \
+                        --output none
                       echo "Green déployée, sans trafic."
 
                       # ---------- 4. Attendre que green soit en bonne santé
