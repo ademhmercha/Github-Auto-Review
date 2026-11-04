@@ -114,7 +114,7 @@ export default function InputForm({ onAnalyze }) {
           </h1>
 
           <p className="rise-in mt-8 max-w-md text-lg leading-relaxed text-ink/65" style={{ '--d': '1000ms' }}>
-            Paste any public GitHub repo. Five agents read it, score it, and rewrite the worst parts, in about a
+             Five agents read it, score it, and rewrite the worst parts, in about a
             minute.
           </p>
 
