@@ -24,6 +24,11 @@ Chaque changement traverse un pipeline qui cherche des secrets, analyse le code 
 
 Région Azure : `francecentral`.
 
+![Architecture : GitHub, Azure DevOps, SonarQube Cloud et les quatre groupes de ressources Azure](docs/images/architecture.png)
+
+<details>
+<summary>Version texte du schéma d'architecture (Mermaid)</summary>
+
 ```mermaid
 flowchart LR
     dev(["Développeur"])
@@ -88,6 +93,8 @@ flowchart LR
     wt --- aiprod
 ```
 
+</details>
+
 ![Révisions de ca-gar-prod : la nouvelle à 100 % du trafic, l'ancienne conservée à 0 %](docs/images/revisions-blue-green.png)
 
 | Groupe de ressources | Contenu | Géré par |
@@ -104,6 +111,11 @@ Vercel déploie un aperçu de chaque pull request, ainsi qu'une copie publique d
 ## Le pipeline
 
 Le pipeline principal est dans [pipelines/azure-pipelines.yml](pipelines/azure-pipelines.yml), le plan/apply Terraform dans [pipelines/templates/terraform.yml](pipelines/templates/terraform.yml), le rollback dans [pipelines/rollback.yml](pipelines/rollback.yml).
+
+![Pipeline CI/CD : barrières de la CI, infrastructure, déploiement dev, blue-green en prod et rollback](docs/images/pipeline.png)
+
+<details>
+<summary>Version texte du schéma du pipeline (Mermaid)</summary>
 
 ```mermaid
 flowchart TD
@@ -147,6 +159,8 @@ flowchart TD
 
     rbk["Pipeline de rollback<br/>lancé à la main, avec approbation"] -.->|"100 % du trafic vers une révision précédente"| BG
 ```
+
+</details>
 
 Dans le stage CI, Checkov s'exécute en parallèle du job Build ; Gitleaks doit réussir avant le Build. Les stages d'infrastructure attendent la fin de tout le stage CI.
 
